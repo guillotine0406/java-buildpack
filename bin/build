@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+layersdir=/layers/example_java
+mkdir -p "$layersdir"
+
+dependencieslayer="$layersdir"/dependencies
+mkdir -p "$dependencieslayer/.m2/repository"
+
+echo -e '[types]\nlaunch = true' >> "$layersdir/dependencies.toml"
+
+mavenLayer="$layersdir"/maven
+mkdir -p "$mavenLayer"
+echo -e '[types]\nlaunch = true' > "$layersdir/maven.toml"
+
+jdkLayer="$layersdir"/jdk
+mkdir -p "$jdkLayer"
+echo -e '[types]\nlaunch = true' > "$layersdir/jdk.toml"
+
+# Download Maven
+echo "Downloading Maven"
+maven_url=https://dlcdn.apache.org/maven/maven-3/3.9.2/binaries/apache-maven-3.9.2-bin.tar.gz
+wget -q -O - "$maven_url" | tar --strip-components=1 -xzf - -C "$mavenLayer"
+
+echo "Downloading JDK"
+jdk_url=https://download.oracle.com/java/17/archive/jdk-17.0.4.1_linux-x64_bin.tar.gz
+wget -q -O - "$jdk_url" | tar --strip-components=1 -xzf - -C "$jdkLayer"
+
+JAVA_HOME=$jdkLayer $mavenLayer/bin/mvn -Dmaven.repo.local=$dependencieslayer/.m2/repository clean package
+
+for jarFile in $(find target -maxdepth 1 -name "*.jar" -type f); do
+
+    echo '[[processes]]' >> "$layersdir/launch.toml"
+    echo 'type = "web"' >> "$layersdir/launch.toml"
+    echo 'command = "java"' >> "$layersdir/launch.toml"
+    echo 'args = ["-jar", "'"$jarFile"'"]' >> "$layersdir/launch.toml"
+    echo 'default = true' >> "$layersdir/launch.toml"
+   break;
+done
